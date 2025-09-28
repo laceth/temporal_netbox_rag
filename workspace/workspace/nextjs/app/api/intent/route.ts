@@ -1,11 +1,9 @@
 import { NextRequest } from "next/server";
 
-// Proxies a text+optional threadId to FastAPI /message-with-config (no file upload in this route)
 export async function POST(req: NextRequest) {
   const { text, threadId } = await req.json();
   const API_BASE = process.env.API_BASE || "http://localhost:8000";
 
-  // Ensure thread
   let tid = threadId;
   if (!tid) {
     const t = await fetch(`${API_BASE}/threads`, { method: "POST" });
