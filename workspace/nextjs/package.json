@@ -1,0 +1,7 @@
+{
+  "name": "netops-ui",
+  "private": true,
+  "scripts": {
+    "dev": "next dev"
+  }
+}

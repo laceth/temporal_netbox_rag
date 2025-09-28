@@ -1,0 +1,13 @@
+set system login message "{{ motd }}"
+{% for v in vlans_ingress -%}
+set vlans VLAN-{{ v }} vlan-id {{ v }}
+{% endfor -%}
+set interfaces {{ ingress_interfaces|join(' unit 0 family ethernet-switching; set interfaces ') }} unit 0 family ethernet-switching vlan members VLAN-{{ vlans_ingress[0] if vlans_ingress else 1 }}
+set interfaces {{ uplink_trunks|join(' unit 0 family ethernet-switching; set interfaces ') }} unit 0 family ethernet-switching port-mode trunk
+{% if vlans_egress == 'all' -%}
+set interfaces {{ uplink_trunks|join(' unit 0 family ethernet-switching; set interfaces ') }} unit 0 family ethernet-switching vlan members all
+{% else -%}
+set interfaces {{ uplink_trunks|join(' unit 0 family ethernet-switching; set interfaces ') }} unit 0 family ethernet-switching vlan members [ {{ vlans_ingress|join(' ') }} ]
+{% endif -%}
+set interfaces {{ mgmt_interface }} unit 0 family inet address {{ mgmt_ip }}/{{ mgmt_mask }}
+commit check

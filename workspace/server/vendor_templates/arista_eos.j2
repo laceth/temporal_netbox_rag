@@ -1,0 +1,16 @@
+enable
+configure
+{% for v in vlans_ingress -%}
+vlan {{ v }}
+ name VLAN_{{ v }}
+{% endfor -%}
+interface {{ ingress_interfaces|join(',') }}
+ switchport access vlan {{ vlans_ingress[0] if vlans_ingress else 1 }}
+ spanning-tree portfast
+interface {{ uplink_trunks|join(',') }}
+ switchport mode trunk
+ switchport trunk allowed vlan {{ vlans_egress if vlans_egress != 'all' else '1-4094' }}
+interface {{ mgmt_interface }}
+ ip address {{ mgmt_ip }}/{{ mgmt_mask }}
+end
+write

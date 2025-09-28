@@ -1,0 +1,21 @@
+banner motd ^{{ motd }}^
+!
+conf t
+{% for v in vlans_ingress -%}
+vlan {{ v }}
+ name VLAN_{{ v }}
+{% endfor -%}
+interface range {{ ingress_interfaces|join(',') }}
+ switchport mode access
+ switchport access vlan {{ vlans_ingress[0] if vlans_ingress else 1 }}
+ spanning-tree portfast
+ exit
+interface range {{ uplink_trunks|join(',') }}
+ switchport mode trunk
+ switchport trunk allowed vlan {{ vlans_egress if vlans_egress != 'all' else 'all' }}
+ exit
+interface {{ mgmt_interface }}
+ ip address {{ mgmt_ip }} {{ mgmt_mask }}
+ exit
+end
+write memory
