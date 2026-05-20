@@ -44,7 +44,7 @@ def extract_entities(text: str) -> Dict[str, Any]:
     """Extract common NetOps entities from free text (simple rule-based)."""
     entities: Dict[str, Any] = {}
     # MOTD
-    m = re.search(r"motd\s+(?:"([^"]+)"|'([^']+)'|\^([^\^]+)\^|([^\n]+))", text, re.I)
+    m = re.search(r'motd\s+(?:"([^"]+)"|\'([^\']+)\'|\^([^\^]+)\^|([^\n]+))', text, re.I)
     if m:
         entities["motd"] = next((g for g in m.groups() if g), None)
 
