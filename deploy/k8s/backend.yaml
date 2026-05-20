@@ -15,10 +15,12 @@ spec:
       labels:
         app: netbox-rag-backend
     spec:
+      imagePullSecrets:
+        - name: ghcr-pull-secret
       containers:
         - name: backend
           image: ghcr.io/laceth/netbox-rag-backend:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
           envFrom:
