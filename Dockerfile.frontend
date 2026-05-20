@@ -11,4 +11,4 @@ COPY workspace/nextjs/ ./
 ENV NODE_ENV=development
 EXPOSE 3000
 # --no-turbopack avoids workspace-root inference issues on non-standard container layouts
-CMD ["./node_modules/.bin/next", "dev", "--no-turbopack", "-p", "3000"]
+CMD ["./node_modules/.bin/next", "dev", "-p", "3000"]
