@@ -1,12 +1,14 @@
 FROM node:20-alpine AS deps
-WORKDIR /app
+WORKDIR /srv/frontend
 COPY workspace/nextjs/package.json ./
-RUN npm install next react react-dom
+# Pin Next.js 14 (matches experimental.appDir config); pre-install TypeScript to avoid runtime prompt
+RUN npm install next@14 react react-dom typescript @types/react @types/node
 
 FROM node:20-alpine AS runner
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+WORKDIR /srv/frontend
+COPY --from=deps /srv/frontend/node_modules ./node_modules
 COPY workspace/nextjs/ ./
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 EXPOSE 3000
-CMD ["./node_modules/.bin/next", "dev", "-p", "3000"]
+# --no-turbopack avoids workspace-root inference issues on non-standard container layouts
+CMD ["./node_modules/.bin/next", "dev", "--no-turbopack", "-p", "3000"]
