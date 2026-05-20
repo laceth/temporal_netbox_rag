@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netbox-rag-backend
+  namespace: netbox
+  labels:
+    app: netbox-rag-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: netbox-rag-backend
+  template:
+    metadata:
+      labels:
+        app: netbox-rag-backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/laceth/netbox-rag-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: netbox-rag-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netbox-rag-backend
+  namespace: netbox
+spec:
+  selector:
+    app: netbox-rag-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
