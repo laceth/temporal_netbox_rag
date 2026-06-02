@@ -6,7 +6,15 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 load_dotenv()
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+_client = None
+def _oai():
+    # Lazy OpenAI client — instantiate on first use so the router still
+    # MOUNTS when OPENAI_API_KEY is absent at import (it fails only if the
+    # LLM endpoint is actually called without a key).
+    global _client
+    if _client is None:
+        _client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    return _client
 
 router = APIRouter(prefix="/intent/llm", tags=["intent-llm"])
 
@@ -28,18 +36,18 @@ EMIT_INTENT_SCHEMA: Dict[str, Any] = {
 }
 
 def ensure_intent_assistant() -> str:
-    page = client.beta.assistants.list(order="desc", limit=20)
+    page = _oai().beta.assistants.list(order="desc", limit=20)
     for a in page.data:
         if a.name == INTENT_ASSISTANT_NAME:
             has_fn = any((getattr(t, "type", None) == "function" and getattr(getattr(t, "function", None), "name", None) == "emit_intent") for t in (a.tools or []))
             if not has_fn:
-                a = client.beta.assistants.update(
+                a = _oai().beta.assistants.update(
                     assistant_id=a.id,
                     model=INTENT_ASSISTANT_MODEL,
                     tools=[{"type":"function","function":EMIT_INTENT_SCHEMA}]
                 )
             return a.id
-    a = client.beta.assistants.create(
+    a = _oai().beta.assistants.create(
         name=INTENT_ASSISTANT_NAME,
         model=INTENT_ASSISTANT_MODEL,
         instructions=(
@@ -65,7 +73,7 @@ class LLMParseOut(BaseModel):
 
 def poll(thread_id: str, run_id: str):
     while True:
-        r = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
+        r = _oai().beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
         if r.status in ("completed","failed","cancelled","expired"):
             return r
         if r.status == "requires_action":
@@ -75,9 +83,9 @@ def poll(thread_id: str, run_id: str):
 @router.post("/parse", response_model=LLMParseOut)
 def llm_parse(payload: LLMParseIn):
     aid = ensure_intent_assistant()
-    tid = payload.thread_id or client.beta.threads.create().id
-    client.beta.threads.messages.create(thread_id=tid, role="user", content=payload.text)
-    run = client.beta.threads.runs.create(thread_id=tid, assistant_id=aid)
+    tid = payload.thread_id or _oai().beta.threads.create().id
+    _oai().beta.threads.messages.create(thread_id=tid, role="user", content=payload.text)
+    run = _oai().beta.threads.runs.create(thread_id=tid, assistant_id=aid)
     r = poll(tid, run.id)
 
     emitted = None
@@ -92,13 +100,13 @@ def llm_parse(payload: LLMParseIn):
                     emitted = json.loads(tc.function.arguments)
                 except Exception:
                     emitted = {"_raw_args": tc.function.arguments}
-                client.beta.threads.runs.submit_tool_outputs(
+                _oai().beta.threads.runs.submit_tool_outputs(
                     thread_id=tid, run_id=run.id,
                     tool_outputs=[{"tool_call_id": tc.id, "output": "ok"}]
                 )
         r = poll(tid, run.id)
 
-    msgs = client.beta.threads.messages.list(thread_id=tid, order="desc", limit=5)
+    msgs = _oai().beta.threads.messages.list(thread_id=tid, order="desc", limit=5)
     asst_msg_id = None
     for m in msgs.data:
         if m.role == "assistant":
