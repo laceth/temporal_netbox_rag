@@ -120,11 +120,20 @@ class NetBox:
         res = r.json().get("results", [])
         return res[0] if res else None
 
+    @staticmethod
+    def _scalar(v: Any) -> Any:
+        # NetBox returns FK fields as {"id":N,...} and choice fields as
+        # {"value":"active",...} on GET, but we send ids / strings. Normalize so
+        # the change-diff is real (otherwise every re-run looks "changed" → not idempotent).
+        if isinstance(v, dict):
+            return v.get("id", v.get("value", v))
+        return v
+
     def upsert(self, path: str, key: dict, body: dict) -> tuple[str, dict]:
-        """GET by key; PATCH if exists (and changed), else POST. Returns (action, obj)."""
+        """GET by key; PATCH if exists (and genuinely changed), else POST."""
         existing = self._get1(path, key)
         if existing:
-            patch = {k: v for k, v in body.items() if existing.get(k) != v}
+            patch = {k: v for k, v in body.items() if self._scalar(existing.get(k)) != v}
             if not patch:
                 return ("noop", existing)
             r = self.s.patch(f"{self.base}{path}{existing['id']}/", json=patch, verify=self.verify, timeout=15)
@@ -140,13 +149,26 @@ def sync_to_netbox(devices: list[NbDevice], nb: NetBox) -> dict[str, int]:
     site_action, site = nb.upsert("/api/dcim/sites/", {"slug": SITE_SLUG},
                                   {"name": SITE_NAME, "slug": SITE_SLUG, "status": "active"})
     counts[site_action] += 1
+
+    # NetBox devices require a device_type, which requires a manufacturer.
+    # One vendor-neutral manufacturer + per-kind device types for the vlab.
+    mfr_action, mfr = nb.upsert("/api/dcim/manufacturers/", {"slug": "testpulse-lab"},
+                                {"name": "TestPulse Lab", "slug": "testpulse-lab"})
+    counts[mfr_action] += 1
+    dtype_cache: dict[str, dict] = {}
+    for kind in {d.kind for d in devices}:
+        dt_action, dt = nb.upsert("/api/dcim/device-types/", {"slug": f"vlab-{kind}"},
+                                  {"manufacturer": mfr["id"], "model": f"vlab-{kind}", "slug": f"vlab-{kind}"})
+        counts[dt_action] += 1
+        dtype_cache[kind] = dt
+
     for d in devices:
         role_action, role = nb.upsert("/api/dcim/device-roles/", {"slug": d.role},
                                       {"name": d.role.replace("-", " ").title(), "slug": d.role, "color": "9e9e9e"})
         counts[role_action] += 1
         act, _dev = nb.upsert("/api/dcim/devices/", {"name": d.name},
                               {"name": d.name, "site": site["id"], "role": role["id"],
-                               "status": "active", "tags": []})
+                               "device_type": dtype_cache[d.kind]["id"], "status": "active", "tags": []})
         counts[act] += 1
         # (interfaces/IPs/services upsert would follow the same pattern; kept lean
         #  for the first slice — devices+roles+site prove the idempotent path.)
